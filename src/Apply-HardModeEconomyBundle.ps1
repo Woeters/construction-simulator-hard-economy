@@ -12,26 +12,163 @@ param(
     [string]$GameAssembly,
 
     [Parameter(Mandatory = $true)]
-    [string]$GlobalMetadata
+    [string]$GlobalMetadata,
+
+    [Parameter(Mandatory = $true)]
+    [string]$SettingsFile
 )
 
 $ErrorActionPreference = 'Stop'
 
 $ExpectedVanillaBundleSha256 = '1183BF9CC81DA0341CAE865BAF17B1310F7C9992B46C8C1DD46848AF1FA6839C'
-$ExpectedHardModeBundleSha256 = '648886D676450869BDFDE02F33A000804B42C8B7BE80556B765C548D4E9039EF'
+$RequiredSettingNames = @(
+    'RentalMultiplier',
+    'MachinePurchasePriceMultiplier',
+    'FuelMultiplier',
+    'MaintenanceMultiplier',
+    'MachineTransportMultiplier',
+    'BulkMaterialPriceMultiplier',
+    'BuildingMaterialPriceMultiplier',
+    'BuildingMaterialSaleMaxActive',
+    'BuildingMaterialSaleHourlyChancePercent',
+    'VehicleSaleMaxActive',
+    'VehicleSaleHourlyChancePercent',
+    'FastTravelMultiplier',
+    'MachineResalePercent',
+    'InstantFillPriceMultiplier',
+    'InstantEmptyPayoutPercent',
+    'WarehouseDeliveryCostMultiplier',
+    'ConstructionSiteDeliveryCostMultiplier',
+    'CraneTransportMultiplier',
+    'PhysicalBulkResalePercent',
+    'BuildingMaterialResalePercent'
+)
+$PercentSettingNames = @(
+    'MachineResalePercent',
+    'InstantEmptyPayoutPercent',
+    'PhysicalBulkResalePercent',
+    'BuildingMaterialResalePercent',
+    'BuildingMaterialSaleHourlyChancePercent',
+    'VehicleSaleHourlyChancePercent'
+)
+$SettingRanges = @{
+    RentalMultiplier                         = @(0.0, 20.0)
+    MachinePurchasePriceMultiplier            = @(0.0, 20.0)
+    FuelMultiplier                            = @(0.0, 20.0)
+    MaintenanceMultiplier                     = @(0.0, 20.0)
+    MachineTransportMultiplier                = @(0.0, 20.0)
+    BulkMaterialPriceMultiplier               = @(0.0, 20.0)
+    BuildingMaterialPriceMultiplier           = @(0.0, 20.0)
+    BuildingMaterialSaleMaxActive              = @(0.0, 50.0)
+    BuildingMaterialSaleHourlyChancePercent    = @(0.0, 50.0)
+    VehicleSaleMaxActive                       = @(0.0, 50.0)
+    VehicleSaleHourlyChancePercent             = @(0.0, 50.0)
+    FastTravelMultiplier                       = @(0.0, 20.0)
+    MachineResalePercent                       = @(0.0, 100.0)
+    InstantFillPriceMultiplier                 = @(0.0, 20.0)
+    InstantEmptyPayoutPercent                  = @(0.0, 20.0)
+    WarehouseDeliveryCostMultiplier            = @(0.0, 20.0)
+    ConstructionSiteDeliveryCostMultiplier     = @(0.0, 20.0)
+    CraneTransportMultiplier                   = @(0.0, 20.0)
+    PhysicalBulkResalePercent                  = @(0.0, 100.0)
+    BuildingMaterialResalePercent              = @(0.0, 100.0)
+}
+$WholeNumberSettingNames = @(
+    'BuildingMaterialSaleMaxActive',
+    'VehicleSaleMaxActive'
+)
 
 function Assert-Equal {
     param($Actual, $Expected, [string]$Label)
     if ($Actual -ne $Expected) {
-        throw "$Label is '$Actual'; expected '$Expected'. The installed game file is not the supported Steam version."
+        throw "$Label is '$Actual'; expected '$Expected'. The original game file is not the supported Steam version."
     }
 }
 
 function Assert-Float {
     param([double]$Actual, [double]$Expected, [string]$Label)
     if ([math]::Abs($Actual - $Expected) -gt 0.000001) {
-        throw "$Label is '$Actual'; expected '$Expected'. The installed game file is not the supported Steam version."
+        throw "$Label is '$Actual'; expected '$Expected'. The original game file is not the supported Steam version."
     }
+}
+
+function Convert-ToGameInt {
+    param(
+        [Parameter(Mandatory = $true)][int]$VanillaValue,
+        [Parameter(Mandatory = $true)][double]$Multiplier,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $calculated = [math]::Round(
+        ([double]$VanillaValue * $Multiplier),
+        0,
+        [MidpointRounding]::AwayFromZero
+    )
+    if ($calculated -lt 0 -or $calculated -gt [int]::MaxValue) {
+        throw "$Label produces a value outside the supported game range."
+    }
+    return [int]$calculated
+}
+
+function Read-TestSettings {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Settings file is missing: $Path"
+    }
+
+    $settings = @{}
+    $lineNumber = 0
+    foreach ($rawLine in Get-Content -LiteralPath $Path) {
+        $lineNumber++
+        $line = $rawLine.Trim()
+        if ($line.Length -eq 0 -or $line.StartsWith('#')) {
+            continue
+        }
+        if ($line -notmatch '^([A-Za-z][A-Za-z0-9]*)\s*=\s*(.+)$') {
+            throw "Invalid settings line $lineNumber. Use Name=number."
+        }
+
+        $name = $matches[1]
+        $textValue = ($matches[2] -split '\s+#', 2)[0].Trim()
+        if ($name -notin $RequiredSettingNames) {
+            throw "Unknown setting '$name' on line $lineNumber."
+        }
+        if ($settings.ContainsKey($name)) {
+            throw "Setting '$name' occurs more than once."
+        }
+        if ($textValue.Contains(',')) {
+            throw "Invalid value for '$name'. Use a decimal point, for example 1.2, not 1,2."
+        }
+
+        $number = 0.0
+        $parsed = [double]::TryParse(
+            $textValue,
+            [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [ref]$number
+        )
+        if (-not $parsed -or [double]::IsNaN($number) -or [double]::IsInfinity($number)) {
+            throw "Invalid value for '$name'. Use a whole number or a decimal with a dot."
+        }
+        $minimum = [double]$SettingRanges[$name][0]
+        $maximum = [double]$SettingRanges[$name][1]
+        if ($number -lt $minimum -or $number -gt $maximum) {
+            throw "Setting '$name' must be between $minimum and $maximum."
+        }
+        if ($name -in $WholeNumberSettingNames -and [math]::Abs($number - [math]::Round($number)) -gt 0.000001) {
+            throw "Setting '$name' must be a whole number."
+        }
+
+        $settings[$name] = $number
+    }
+
+    foreach ($requiredName in $RequiredSettingNames) {
+        if (-not $settings.ContainsKey($requiredName)) {
+            throw "Required setting '$requiredName' is missing."
+        }
+    }
+    return $settings
 }
 
 function Write-ModifiedAssetsFile {
@@ -75,12 +212,13 @@ function Write-ModifiedAssetsFile {
     }
 }
 
+$settings = Read-TestSettings $SettingsFile
 $assetsToolsPath = Join-Path $ToolDirectory 'AssetsTools.NET.dll'
 $cpp2IlPath = Join-Path $ToolDirectory 'AssetsTools.NET.Cpp2IL.dll'
 $classPackagePath = Join-Path $ToolDirectory 'classdata.tpk'
 foreach ($requiredTool in @($assetsToolsPath, $cpp2IlPath, $classPackagePath)) {
     if (-not (Test-Path -LiteralPath $requiredTool -PathType Leaf)) {
-        throw "Required patcher component is missing: $requiredTool"
+        throw "Required tuner component is missing: $requiredTool"
     }
 }
 
@@ -97,6 +235,7 @@ $actualInputHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $inputPath).Hash
 Assert-Equal $actualInputHash $ExpectedVanillaBundleSha256 'Economy bundle SHA-256'
 
 $manager = [AssetsTools.NET.Extra.AssetsManager]::new()
+$generator = $null
 $manager.LoadClassPackage($classPackagePath) | Out-Null
 $generator = [AssetsTools.NET.Cpp2IL.Cpp2IlTempGenerator]::new($metadataPath, $assemblyPath)
 $manager.MonoTempGenerator = $generator
@@ -117,29 +256,38 @@ try {
     Assert-Equal $machines.Count 140 'Number of machine definitions'
 
     $rentCount = 0
+    $machinePurchasePriceCount = 0
     $maintenanceCount = 0
     $fuelCount = 0
     $deliveryCount = 0
     foreach ($machine in $machines) {
+        $purchasePrice = $machine['price'].AsInt
         $rent = $machine['rentCost'].AsInt
         $maintenance = $machine['maintenanceCost'].AsInt
         $fuel = $machine['fuelCost'].AsInt
         $delivery = $machine['deliveryCost'].AsInt
 
+        if ($purchasePrice -ne 0) {
+            $machine['price'].AsInt = Convert-ToGameInt `
+                $purchasePrice `
+                $settings.MachinePurchasePriceMultiplier `
+                'MachinePurchasePriceMultiplier'
+            $machinePurchasePriceCount++
+        }
         if ($rent -ne 0) {
-            $machine['rentCost'].AsInt = [int]([long]$rent * 10)
+            $machine['rentCost'].AsInt = Convert-ToGameInt $rent $settings.RentalMultiplier 'RentalMultiplier'
             $rentCount++
         }
         if ($maintenance -ne 0) {
-            $machine['maintenanceCost'].AsInt = [int]([long]$maintenance * 4)
+            $machine['maintenanceCost'].AsInt = Convert-ToGameInt $maintenance $settings.MaintenanceMultiplier 'MaintenanceMultiplier'
             $maintenanceCount++
         }
         if ($fuel -ne 0) {
-            $machine['fuelCost'].AsInt = [int]([long]$fuel * 4)
+            $machine['fuelCost'].AsInt = Convert-ToGameInt $fuel $settings.FuelMultiplier 'FuelMultiplier'
             $fuelCount++
         }
         if ($delivery -ne 0) {
-            $machine['deliveryCost'].AsInt = [int]([long]$delivery * 10)
+            $machine['deliveryCost'].AsInt = Convert-ToGameInt $delivery $settings.MachineTransportMultiplier 'MachineTransportMultiplier'
             $deliveryCount++
         }
     }
@@ -174,21 +322,30 @@ try {
     Assert-Float $economyBase['sellPriceMultiplierBulkHelper'].AsFloat 0.50 'Instant empty payout multiplier'
     Assert-Float $economyBase['loanRate'].AsFloat 0.02 'Loan rate'
 
-    $economyBase['soilPrize'].AsInt = 1200
-    $economyBase['gravelPrize'].AsInt = 2000
-    $economyBase['sandPrize'].AsInt = 1500
-    $economyBase['concretePrize'].AsInt = 1000
-    $economyBase['asphaltPrize'].AsInt = 3000
-    $economyBase['bulkPriceMultiplierHelper'].AsFloat = 3.0
-    $economyBase['cargoTransportCostMultiplierWarehouse'].AsFloat = 0.50
-    $economyBase['cargoTransportCostMultiplierMissionSite'].AsFloat = 0.75
+    $bulkMultiplier = $settings.BulkMaterialPriceMultiplier
+    $economyBase['soilPrize'].AsInt = Convert-ToGameInt 600 $bulkMultiplier 'BulkMaterialPriceMultiplier'
+    $economyBase['gravelPrize'].AsInt = Convert-ToGameInt 1000 $bulkMultiplier 'BulkMaterialPriceMultiplier'
+    $economyBase['sandPrize'].AsInt = Convert-ToGameInt 750 $bulkMultiplier 'BulkMaterialPriceMultiplier'
+    $economyBase['concretePrize'].AsInt = Convert-ToGameInt 500 $bulkMultiplier 'BulkMaterialPriceMultiplier'
+    $economyBase['asphaltPrize'].AsInt = Convert-ToGameInt 1500 $bulkMultiplier 'BulkMaterialPriceMultiplier'
+    $economyBase['bulkPriceMultiplierHelper'].AsFloat = [single]$settings.InstantFillPriceMultiplier
+    $economyBase['cargoTransportCostMultiplierWarehouse'].AsFloat =
+        [single](0.10 * $settings.WarehouseDeliveryCostMultiplier)
+    $economyBase['cargoTransportCostMultiplierMissionSite'].AsFloat =
+        [single](0.15 * $settings.ConstructionSiteDeliveryCostMultiplier)
     $economyBase['craneSetupCost'].AsInt = 25000
-    $economyBase['craneTransportCostPerKm'].AsFloat = 0.015
-    $economyBase['characterFastTravelPricePerMeter'].AsFloat = 0.50
-    $economyBase['sellPriceMultiplierMachines'].AsFloat = 0.50
-    $economyBase['sellPriceMultiplierCargos'].AsFloat = 0.375
-    $economyBase['sellPriceMultiplierBulk'].AsFloat = 0.09375
-    $economyBase['sellPriceMultiplierBulkHelper'].AsFloat = 0.0
+    $economyBase['craneTransportCostPerKm'].AsFloat =
+        [single](0.003 * $settings.CraneTransportMultiplier)
+    $economyBase['characterFastTravelPricePerMeter'].AsFloat =
+        [single](0.05 * $settings.FastTravelMultiplier)
+    $economyBase['sellPriceMultiplierMachines'].AsFloat =
+        [single]($settings.MachineResalePercent / 100.0)
+    $economyBase['sellPriceMultiplierCargos'].AsFloat =
+        [single]($settings.BuildingMaterialResalePercent / 100.0)
+    $economyBase['sellPriceMultiplierBulk'].AsFloat =
+        [single]($settings.PhysicalBulkResalePercent / 100.0)
+    $economyBase['sellPriceMultiplierBulkHelper'].AsFloat =
+        [single]($settings.InstantEmptyPayoutPercent / 100.0)
 
     $cargoInfo = $economyAssets.file.GetAssetInfo(602)
     $cargoBase = $manager.GetBaseField(
@@ -207,7 +364,10 @@ try {
             if ($oldPrice -le 0) {
                 throw "Purchasable cargo $($cargo['cargoID'].AsInt) has an invalid price of $oldPrice."
             }
-            $cargo['price'].AsInt = [int]([long]$oldPrice * 2)
+            $cargo['price'].AsInt = Convert-ToGameInt `
+                $oldPrice `
+                $settings.BuildingMaterialPriceMultiplier `
+                'BuildingMaterialPriceMultiplier'
             $purchasableCount++
         }
         else {
@@ -235,198 +395,87 @@ try {
     $economyFields[1] = $cargoBase
     $economyBytes = Write-ModifiedAssetsFile `
         -AssetsFileInstance $economyAssets `
-        -AssetInfos $econo…4262 tokens truncated…toration stopped because the game files are '$($status.State)'. Use Steam's file verification instead."
-    }
-    if (-not (Test-Path -LiteralPath $status.Paths.State -PathType Leaf)) {
-        throw "No Hard Economy backup record was found. Use Steam's file verification to restore the game."
-    }
+        -AssetInfos $economyInfos `
+        -BaseFields $economyFields `
+        -ClassDatabase $classDatabase
 
-    $savedState = Get-Content -LiteralPath $status.Paths.State -Raw | ConvertFrom-Json
-    if ([string]::IsNullOrWhiteSpace($savedState.backupDirectory)) {
-        throw 'The Hard Economy backup record is invalid.'
-    }
-    Restore-FromBackupDirectory -Paths $status.Paths -BackupDirectory $savedState.backupDirectory
+    $bundleReplacements = [System.Collections.Generic.List[AssetsTools.NET.BundleReplacer]]::new()
+    $machineEntryName = $bundle.file.GetFileName(0)
+    $economyEntryName = $bundle.file.GetFileName(2)
+    $machineReplacement = [AssetsTools.NET.BundleReplacerFromMemory]::new(
+        $machineEntryName,
+        $machineEntryName,
+        $true,
+        $machineBytes,
+        0,
+        $machineBytes.Length
+    )
+    $economyReplacement = [AssetsTools.NET.BundleReplacerFromMemory]::new(
+        $economyEntryName,
+        $economyEntryName,
+        $true,
+        $economyBytes,
+        0,
+        $economyBytes.Length
+    )
+    $bundleReplacements.Add($machineReplacement)
+    $bundleReplacements.Add($economyReplacement)
 
-    $savedState | Add-Member -NotePropertyName restoredAt -NotePropertyValue ((Get-Date).ToString('o')) -Force
-    $savedState | ConvertTo-Json | Set-Content -LiteralPath $status.Paths.State -Encoding UTF8
-    return "The original Construction Simulator files were restored successfully.`r`nBackup kept at: $($savedState.backupDirectory)"
-}
-
-function Format-StatusText {
-    param([Parameter(Mandatory = $true)]$Status)
-    switch ($Status.State) {
-        'Vanilla' { return 'Supported original Steam files detected. Hard Economy can be installed.' }
-        'HardMode' { return "Hard Economy $ModVersion is installed and both files are valid." }
-        'Mixed' { return 'The two files are from different versions. Installation is blocked for safety.' }
-        default { return 'Unknown or updated game files detected. Installation is blocked for safety.' }
-    }
-}
-
-function Show-PatcherGui {
-    Add-Type -AssemblyName System.Windows.Forms
-    Add-Type -AssemblyName System.Drawing
-    [System.Windows.Forms.Application]::EnableVisualStyles()
-
-    $form = [System.Windows.Forms.Form]::new()
-    $form.Text = "Construction Simulator - Hard Economy Patcher $ModVersion"
-    $form.StartPosition = 'CenterScreen'
-    $form.ClientSize = [Drawing.Size]::new(700, 430)
-    $form.FormBorderStyle = 'FixedDialog'
-    $form.MaximizeBox = $false
-
-    $title = [System.Windows.Forms.Label]::new()
-    $title.Text = 'Hard Economy'
-    $title.Font = [Drawing.Font]::new('Segoe UI', 18, [Drawing.FontStyle]::Bold)
-    $title.Location = [Drawing.Point]::new(24, 20)
-    $title.AutoSize = $true
-    $form.Controls.Add($title)
-
-    $subtitle = [System.Windows.Forms.Label]::new()
-    $subtitle.Text = 'Safe local installer - no original game files are included'
-    $subtitle.Location = [Drawing.Point]::new(28, 60)
-    $subtitle.Size = [Drawing.Size]::new(640, 24)
-    $form.Controls.Add($subtitle)
-
-    $pathLabel = [System.Windows.Forms.Label]::new()
-    $pathLabel.Text = 'Construction Simulator folder:'
-    $pathLabel.Location = [Drawing.Point]::new(28, 98)
-    $pathLabel.AutoSize = $true
-    $form.Controls.Add($pathLabel)
-
-    $pathBox = [System.Windows.Forms.TextBox]::new()
-    $pathBox.Location = [Drawing.Point]::new(28, 122)
-    $pathBox.Size = [Drawing.Size]::new(540, 24)
-    $pathBox.Text = if ([string]::IsNullOrWhiteSpace($GameDirectory)) { Find-DefaultGameRoot } else { $GameDirectory }
-    $form.Controls.Add($pathBox)
-
-    $browseButton = [System.Windows.Forms.Button]::new()
-    $browseButton.Text = 'Browse...'
-    $browseButton.Location = [Drawing.Point]::new(580, 120)
-    $browseButton.Size = [Drawing.Size]::new(90, 28)
-    $form.Controls.Add($browseButton)
-
-    $outputBox = [System.Windows.Forms.TextBox]::new()
-    $outputBox.Location = [Drawing.Point]::new(28, 165)
-    $outputBox.Size = [Drawing.Size]::new(642, 150)
-    $outputBox.Multiline = $true
-    $outputBox.ReadOnly = $true
-    $outputBox.ScrollBars = 'Vertical'
-    $outputBox.Text = 'Select the game folder and click Check status.'
-    $form.Controls.Add($outputBox)
-
-    $statusButton = [System.Windows.Forms.Button]::new()
-    $statusButton.Text = 'Check status'
-    $statusButton.Location = [Drawing.Point]::new(28, 340)
-    $statusButton.Size = [Drawing.Size]::new(125, 38)
-    $form.Controls.Add($statusButton)
-
-    $installButton = [System.Windows.Forms.Button]::new()
-    $installButton.Text = 'Install Hard Economy'
-    $installButton.Location = [Drawing.Point]::new(165, 340)
-    $installButton.Size = [Drawing.Size]::new(145, 38)
-    $form.Controls.Add($installButton)
-
-    $restoreButton = [System.Windows.Forms.Button]::new()
-    $restoreButton.Text = 'Restore originals'
-    $restoreButton.Location = [Drawing.Point]::new(322, 340)
-    $restoreButton.Size = [Drawing.Size]::new(145, 38)
-    $form.Controls.Add($restoreButton)
-
-    $closeButton = [System.Windows.Forms.Button]::new()
-    $closeButton.Text = 'Close'
-    $closeButton.Location = [Drawing.Point]::new(545, 340)
-    $closeButton.Size = [Drawing.Size]::new(125, 38)
-    $form.Controls.Add($closeButton)
-
-    $runOperation = {
-        param([scriptblock]$Operation)
-        $form.UseWaitCursor = $true
-        $statusButton.Enabled = $false
-        $installButton.Enabled = $false
-        $restoreButton.Enabled = $false
-        [System.Windows.Forms.Application]::DoEvents()
-        try {
-            $outputBox.Text = (& $Operation)
+    foreach ($temporaryPath in @($uncompressedPath, $outputPath)) {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath
         }
-        catch {
-            $outputBox.Text = "Stopped safely:`r`n$($_.Exception.Message)"
-            [System.Windows.Forms.MessageBox]::Show(
-                $outputBox.Text,
-                'Hard Economy Patcher',
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Error
-            ) | Out-Null
+    }
+
+    $uncompressedWriter = [AssetsTools.NET.AssetsFileWriter]::new($uncompressedPath)
+    try {
+        $bundle.file.Write($uncompressedWriter, $bundleReplacements, $classDatabase)
+    }
+    finally {
+        $uncompressedWriter.Dispose()
+    }
+
+    $packingManager = [AssetsTools.NET.Extra.AssetsManager]::new()
+    try {
+        $uncompressedBundle = $packingManager.LoadBundleFile($uncompressedPath, $true)
+        $outputWriter = [AssetsTools.NET.AssetsFileWriter]::new($outputPath)
+        try {
+            $uncompressedBundle.file.Pack(
+                $uncompressedBundle.file.DataReader,
+                $outputWriter,
+                [AssetsTools.NET.AssetBundleCompressionType]::LZ4,
+                $false,
+                $null
+            )
         }
         finally {
-            $form.UseWaitCursor = $false
-            $statusButton.Enabled = $true
-            $installButton.Enabled = $true
-            $restoreButton.Enabled = $true
+            $outputWriter.Dispose()
         }
     }
+    finally {
+        $packingManager.UnloadAllBundleFiles() | Out-Null
+    }
 
-    $browseButton.Add_Click({
-        $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
-        $dialog.Description = 'Select the Construction Simulator folder containing ConSim.exe.'
-        if (Test-Path -LiteralPath $pathBox.Text -PathType Container) {
-            $dialog.SelectedPath = $pathBox.Text
-        }
-        if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-            $pathBox.Text = $dialog.SelectedPath
-        }
-        $dialog.Dispose()
-    })
-
-    $statusButton.Add_Click({
-        & $runOperation {
-            $status = Get-InstallationStatus $pathBox.Text
-            Format-StatusText $status
-        }
-    })
-
-    $installButton.Add_Click({
-        $answer = [System.Windows.Forms.MessageBox]::Show(
-            'Install Hard Economy? The patcher will create and validate a complete backup first.',
-            'Install Hard Economy',
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
-        if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
-            & $runOperation { Install-HardMode $pathBox.Text }
-        }
-    })
-
-    $restoreButton.Add_Click({
-        $answer = [System.Windows.Forms.MessageBox]::Show(
-            'Restore the original Construction Simulator files from the automatic backup?',
-            'Restore original files',
-            [System.Windows.Forms.MessageBoxButtons]::YesNo,
-            [System.Windows.Forms.MessageBoxIcon]::Question
-        )
-        if ($answer -eq [System.Windows.Forms.DialogResult]::Yes) {
-            & $runOperation { Restore-HardMode $pathBox.Text }
-        }
-    })
-
-    $closeButton.Add_Click({ $form.Close() })
-    [void]$form.ShowDialog()
-    $form.Dispose()
+    $outputHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $outputPath).Hash
+    [pscustomobject]@{
+        OutputBundle = $outputPath
+        OutputSha256 = $outputHash
+        RentalValues = $rentCount
+        MachinePurchasePrices = $machinePurchasePriceCount
+        MaintenanceValues = $maintenanceCount
+        FuelValues = $fuelCount
+        MachineTransportValues = $deliveryCount
+        PurchasableBuildingMaterials = $purchasableCount
+    }
 }
-
-if ($Action -eq 'Gui') {
-    Show-PatcherGui
-}
-else {
-    if ([string]::IsNullOrWhiteSpace($GameDirectory)) {
-        $GameDirectory = Find-DefaultGameRoot
+finally {
+    if (Test-Path -LiteralPath $uncompressedPath) {
+        Remove-Item -LiteralPath $uncompressedPath
     }
-    if ([string]::IsNullOrWhiteSpace($GameDirectory)) {
-        throw 'No Construction Simulator folder was supplied or detected.'
+    if ($null -ne $generator) {
+        $generator.Dispose()
     }
-
-    switch ($Action) {
-        'Install' { Install-HardMode $GameDirectory }
-        'Restore' { Restore-HardMode $GameDirectory }
-        'Status' { Format-StatusText (Get-InstallationStatus $GameDirectory) }
+    if ($null -ne $manager) {
+        $manager.UnloadAll($true)
     }
 }

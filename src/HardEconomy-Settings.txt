@@ -1,0 +1,31 @@
+# Hard Economy settings
+# Change only the number after '='. Decimals use a dot, not a comma.
+# Both 1.5 and 1.55 are valid for settings marked "decimals allowed".
+# The brackets show the allowed range. Do not remove the setting names.
+
+RentalMultiplier=8                            # [0-20; decimals allowed: 1.5 or 1.55]
+MachinePurchasePriceMultiplier=1.3            # [0-20; decimals allowed: 1.5 or 1.55]
+FuelMultiplier=5                              # [0-20; decimals allowed: 1.5 or 1.55]
+MaintenanceMultiplier=4                       # [0-20; decimals allowed: 1.5 or 1.55]
+MachineTransportMultiplier=10                 # [0-20; decimals allowed: 1.5 or 1.55]
+
+BulkMaterialPriceMultiplier=1.6               # [0-20; decimals allowed: 1.5 or 1.55]
+BuildingMaterialPriceMultiplier=2             # [0-20; decimals allowed: 1.5 or 1.55]
+
+BuildingMaterialSaleMaxActive=5               # [0-50; whole number only]
+BuildingMaterialSaleHourlyChancePercent=18    # [0-50; decimals allowed: 1.5 or 1.55]
+VehicleSaleMaxActive=5                        # [0-50; whole number only]
+VehicleSaleHourlyChancePercent=12             # [0-50; decimals allowed: 1.5 or 1.55]
+
+FastTravelMultiplier=10                       # [0-20; decimals allowed: 1.5 or 1.55]
+MachineResalePercent=50                       # [0-100; decimals allowed: 1.5 or 1.55]
+
+InstantFillPriceMultiplier=3                  # [0-20; decimals allowed: 1.5 or 1.55]
+InstantEmptyPayoutPercent=0                   # [0-20; decimals allowed: 1.5 or 1.55]
+
+WarehouseDeliveryCostMultiplier=5             # [0-20; decimals allowed: 1.5 or 1.55]
+ConstructionSiteDeliveryCostMultiplier=5      # [0-20; decimals allowed: 1.5 or 1.55]
+CraneTransportMultiplier=5                    # [0-20; decimals allowed: 1.5 or 1.55]
+
+PhysicalBulkResalePercent=18                  # [0-100; decimals allowed: 1.5 or 1.55]
+BuildingMaterialResalePercent=37.5            # [0-100; decimals allowed: 1.5 or 1.55]

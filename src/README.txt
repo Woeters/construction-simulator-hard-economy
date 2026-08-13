@@ -1,29 +1,40 @@
 CONSTRUCTION SIMULATOR - HARD ECONOMY PATCHER
-Version 0.1.0-beta
+Version 0.2.0
 
 This package does not contain Construction Simulator game files.
-It applies the Hard Economy changes locally to files from your own Steam installation.
+It builds the selected Hard Economy configuration locally from files in your
+own supported Steam installation.
 
-INSTALLATION
+INSTALLATION OR UPDATE
 
 1. Close Construction Simulator.
 2. Extract the complete Hard Economy Patcher folder.
-3. Double-click "Launch Hard Economy Patcher.cmd".
-4. Check that the selected folder contains ConSim.exe.
-5. Click "Install Hard Economy".
+3. Optional: open "HardEconomy-Settings.txt" and change only the numbers.
+   The two hourly sale chances accept values from 0 through 50 percent.
+   Use a dot for decimals. The allowed range is shown behind every setting.
+4. Double-click "Launch Hard Economy Patcher.cmd".
+5. Check that the selected folder contains ConSim.exe.
+6. Click "Apply Hard Economy".
 
-The patcher verifies the supported original Steam files before doing anything.
-It creates and validates a full local backup before installing Hard Economy.
-Unknown, updated or mixed files are rejected without being changed.
+Version 0.1.0-beta can be updated directly. The patcher always rebuilds 0.2.0
+from a validated copy of the original files, so multipliers do not accumulate.
 
-UNINSTALLATION
+CHANGING SETTINGS LATER
 
 1. Close Construction Simulator.
-2. Start the patcher again.
-3. Click "Restore originals".
+2. Edit "HardEconomy-Settings.txt" in this extracted patcher folder.
+3. Start the patcher and click "Apply Hard Economy" again.
 
-The automatic backup is retained after restoration.
-Steam's "Verify integrity of game files" can also restore the original files.
+Keep this complete extracted folder. Do not run the patcher from inside the ZIP.
+
+SAFETY AND RESTORATION
+
+The patcher verifies supported files, retains a validated original-file backup,
+and makes a separate rollback copy before every application. Unknown, updated
+or mixed files are rejected without being changed.
+
+To uninstall, close the game, start the patcher and click "Restore originals".
+Steam's "Verify integrity of game files" can also restore original game files.
 
 COMPATIBILITY
 
@@ -31,6 +42,7 @@ COMPATIBILITY
 - Do not combine this version with the Unofficial Patch.
 - Official game updates can require a new Hard Economy patcher version.
 - No DLC or Season Pass is required.
+- Multiplayer compatibility is not guaranteed.
 
 BACKUPS
 
@@ -38,5 +50,4 @@ Local backups and installation state are stored inside:
 
 Construction Simulator\HardMode_Backups\
 
-These backups are created from the user's own installation and are never included
-in the Hard Economy download.
+These local game-file backups are never included in the download.

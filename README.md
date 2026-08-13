@@ -51,7 +51,8 @@ original backup, so multipliers do not stack.
 - Vehicles can receive temporary discounts of 2%, 4%, 6%, 8% or 10%. Better
   discounts generally expire sooner.
 - Discounted prices and percentages are shown in the dealer interfaces.
-- Sale caps and hourly sale chances are user-configurable.
+- Sale caps and hourly sale chances are user-configurable. Both hourly chances
+  accept values from 0% through 50%.
 
 Building-material sales give warehouses a practical purpose. Players can buy
 useful stock when it is discounted, store the surplus and use it for a later

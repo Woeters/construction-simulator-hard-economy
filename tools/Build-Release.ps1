@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$version = '0.1.0-beta'
+$version = '0.2.0'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repositoryRoot 'build'
@@ -44,6 +44,9 @@ New-Item -ItemType Directory -Path $packageRoot, $toolsRoot, $payloadRoot, $arti
 foreach ($sourceName in @(
     'HardModePatcher.ps1',
     'Apply-HardModeEconomyBundle.ps1',
+    'Update-CompanyMilestones.ps1',
+    'Apply-HardEconomySaleSettings.ps1',
+    'HardEconomy-Settings.txt',
     'Launch Hard Economy Patcher.cmd',
     'README.txt'
 )) {
