@@ -1,7 +1,10 @@
-# Building Hard Economy 0.2.0
+# Building Hard Economy 0.2.1
+
+This source includes the verified Warehouse branch fix and local handling for
+Windows-blocked, hash-checked tuner DLLs.
 
 These instructions recreate the ready-to-use Hard Economy patcher ZIP from the
-public source in this repository. They do not build Construction Simulator and
+source in this repository. They do not build Construction Simulator and
 do not require any Construction Simulator game file.
 
 ## Requirements
@@ -42,7 +45,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Release.ps
 The finished archive is created at:
 
 ```text
-build\artifacts\Hard_Economy_0.2.0_Patcher.zip
+build\artifacts\Hard_Economy_0.2.1_Patcher.zip
 ```
 
 ## What the build script does
@@ -57,7 +60,7 @@ build\artifacts\Hard_Economy_0.2.0_Patcher.zip
    recorded in the public patch manifest.
 
 ```text
-5DBF59CB04D2E4D177DCE4198B4BBF8955F04BA46624A3742A8882B33BDF395C
+A16D2F8135E88FE253796725EA05E74DD6D27C9C935C299F990EECCF8DBEF125
 ```
 
 7. Packages the resulting folder as the distributable ZIP.
@@ -65,6 +68,10 @@ build\artifacts\Hard_Economy_0.2.0_Patcher.zip
 ZIP hashes can differ because ZIP metadata can contain different timestamps.
 The build instead verifies the hashes of all security-sensitive inputs and the
 generated binary patch payload.
+
+The build accepts output directories only under this repository's `build/`
+directory. It refuses to overwrite an existing 0.2.1 ZIP. Choose a fresh
+subdirectory under `build/` for another build.
 
 ## Patch sources
 

@@ -7,7 +7,7 @@ Its purpose is not simply to raise every number: the changes make planning,
 warehouses, manual material transport and vehicle trailers useful parts of
 running a company.
 
-Current version: **0.2.0**
+Current version: **0.2.1**
 
 Author: **Thamonky**
 
@@ -17,6 +17,12 @@ Normal users should download the ready-to-use ZIP from the
 [Releases](https://github.com/Woeters/construction-simulator-hard-economy/releases)
 page. Source-code downloads do not include the third-party runtime files needed
 by the ready-to-use patcher.
+
+Updating from an earlier version? Close the game and extract the new ZIP into a
+new folder. If you customized `HardEconomy-Settings.txt`, copy it from your old
+patcher folder into the new one before clicking **Apply Hard Economy**. Otherwise,
+the included settings will be used. Check the selected game folder before
+applying. You do not need to uninstall first.
 
 ## Default economy
 
@@ -98,7 +104,7 @@ The patcher:
 - verifies supported files with SHA-256 before changing anything;
 - creates and validates backups and a separate per-application rollback copy;
 - rejects unknown, updated or mixed files;
-- can update 0.1.0-beta directly and can reapply changed settings;
+- can update managed 0.1.0-beta or 0.2.0 directly and can reapply changed settings;
 - supports restoring the original files;
 - performs no network communication.
 
@@ -115,7 +121,7 @@ See [BUILDING.md](BUILDING.md) to recreate the distributable patcher.
 ## Compatibility
 
 - Supported platform: Steam PC.
-- Supported game build: the exact file hashes recorded in the 0.2.0 source.
+- Supported game build: the exact original file hashes recorded in the patch source.
 - Do not combine this version with the Unofficial Patch.
 - A Construction Simulator update may require a new Hard Economy release.
 - No DLC or Season Pass is required.

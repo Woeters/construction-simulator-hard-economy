@@ -1,5 +1,5 @@
 CONSTRUCTION SIMULATOR - HARD ECONOMY PATCHER
-Version 0.2.0
+Version 0.2.1
 
 This package does not contain Construction Simulator game files.
 It builds the selected Hard Economy configuration locally from files in your
@@ -10,14 +10,29 @@ INSTALLATION OR UPDATE
 1. Close Construction Simulator.
 2. Extract the complete Hard Economy Patcher folder.
 3. Optional: open "HardEconomy-Settings.txt" and change only the numbers.
-   The two hourly sale chances accept values from 0 through 50 percent.
    Use a dot for decimals. The allowed range is shown behind every setting.
 4. Double-click "Launch Hard Economy Patcher.cmd".
 5. Check that the selected folder contains ConSim.exe.
 6. Click "Apply Hard Economy".
 
-Version 0.1.0-beta can be updated directly. The patcher always rebuilds 0.2.0
+Version 0.1.0-beta and managed 0.2.0 can be updated directly. The patcher rebuilds 0.2.1
 from a validated copy of the original files, so multipliers do not accumulate.
+If Windows marks the extracted DLLs as downloaded, the patcher checks the five
+packaged tuner components by SHA-256 before unblocking those DLLs locally.
+
+KEEP YOUR SETTINGS WHEN UPDATING
+
+The new ZIP contains a fresh HardEconomy-Settings.txt with default values.
+Your old settings are not imported automatically. Extract 0.2.1 into a new
+folder. If you changed HardEconomy-Settings.txt in your previous patcher
+folder, copy it into the new folder BEFORE clicking Apply. Otherwise, the
+included default settings will be used. Keep the old folder until you have
+checked the update. Supported earlier installations update directly; you do
+not need to uninstall first.
+
+If the old folder is gone, the last successfully applied settings were copied
+to Construction Simulator\HardMode_Backups\HardEconomy-LastAppliedSettings.txt.
+Copy that file BEFORE applying 0.2.1; applying the update replaces this copy.
 
 CHANGING SETTINGS LATER
 

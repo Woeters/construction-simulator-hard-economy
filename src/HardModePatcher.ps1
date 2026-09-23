@@ -6,9 +6,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ModVersion = '0.2.0'
+$ModVersion = '0.2.1'
 $VanillaAssemblySha256 = '404C1A5077AB26C7B8456D6F8A686DB73CCDBC424A550D21F62F1E241CEAEB91'
-$BaseAssemblySha256 = '5A5F37EB350C589CFC5A764895CD683A7818BF61F6BF67504C0CCC8B99AB2F26'
+$BaseAssemblySha256 = 'E854D8D33BF1D2AE35801AF81686085365616141759B6A2EF10ADBDD01C12168'
 $VanillaBundleSha256 = '1183BF9CC81DA0341CAE865BAF17B1310F7C9992B46C8C1DD46848AF1FA6839C'
 $Version010AssemblySha256 = '93CD70E11A6E3FE30EF5863600467753EC9A53CA2D7955881FDC7A003C13C1CF'
 $Version010BundleSha256 = '648886D676450869BDFDE02F33A000804B42C8B7BE80556B765C548D4E9039EF'
@@ -22,10 +22,41 @@ $EconomyScript = Join-Path $PSScriptRoot 'Apply-HardModeEconomyBundle.ps1'
 $MilestoneScript = Join-Path $PSScriptRoot 'Update-CompanyMilestones.ps1'
 $SaleScript = Join-Path $PSScriptRoot 'Apply-HardEconomySaleSettings.ps1'
 $ToolDirectory = Join-Path $PSScriptRoot 'tools'
+$ExpectedTools = [ordered]@{
+    'AssetsTools.NET.dll' = 'E169C2C66EA2D948B42311BAB6C171A1BAC012595CEC9FCC2AEF0C92D06E9D27'
+    'AssetsTools.NET.Cpp2IL.dll' = '1F8602203AC7E264D8F0F41B9CC5CA505C74630662F1D575387FE023C92BA4DF'
+    'classdata.tpk' = '129E1F80F930415DB6779FE6089AFA75280CB51462BCEE812BEAB6CD81A764C6'
+    'LibCpp2IL.dll' = '426082B10961E8E4844CE2AC41D88756E18E636B888C2B9ABC5F9565939BFD82'
+    'WasmDisassembler.dll' = 'F487BE8716FF70164F66DC4522197AEB1A86919469FC47E98584BA0FA5D82B86'
+}
 
 function Get-Sha256 { param([string]$Path) (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
 function Assert-File { param([string]$Path) if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Required file is missing: $Path" } }
 function Assert-GameClosed { if (Get-Process -Name 'ConSim' -ErrorAction SilentlyContinue) { throw 'Construction Simulator is running. Close the game and try again.' } }
+
+function Prepare-TunerComponents {
+    # Check every packaged component before removing any Internet Zone marker.
+    foreach ($name in $ExpectedTools.Keys) {
+        $file = Join-Path $ToolDirectory $name
+        Assert-File $file
+        if ((Get-Sha256 $file) -ne $ExpectedTools[$name]) {
+            throw "Packaged tuner component '$name' failed SHA-256 validation. Extract a fresh complete Hard Economy ZIP."
+        }
+    }
+    foreach ($name in $ExpectedTools.Keys) {
+        if (-not $name.EndsWith('.dll', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $file = Join-Path $ToolDirectory $name
+        $zone = Get-Item -LiteralPath $file -Stream 'Zone.Identifier' -ErrorAction SilentlyContinue
+        if ($null -ne $zone) {
+            try { Unblock-File -LiteralPath $file -ErrorAction Stop }
+            catch { throw "Windows blocked verified component '$name'. Extract the ZIP locally and retry, or unblock this verified file in Properties. $($_.Exception.Message)" }
+            if ($null -ne (Get-Item -LiteralPath $file -Stream 'Zone.Identifier' -ErrorAction SilentlyContinue) -or
+                (Get-Sha256 $file) -ne $ExpectedTools[$name]) {
+                throw "Verified tuner component '$name' could not be safely prepared."
+            }
+        }
+    }
+}
 
 function Test-GameRoot {
     param([string]$Path)
@@ -84,9 +115,9 @@ function Get-Status {
     if ($assemblyHash -eq $VanillaAssemblySha256 -and $bundleHash -eq $VanillaBundleSha256) { $state = 'Vanilla' }
     elseif ($assemblyHash -eq $Version010AssemblySha256 -and $bundleHash -eq $Version010BundleSha256) { $state = 'Version010' }
     elseif ($assemblyHash -eq $LocalTestAssemblySha256 -and $bundleHash -eq $LocalTestBundleSha256) { $state = 'LocalTest' }
-    elseif ($null -ne $saved -and [string]$saved.modVersion -eq $ModVersion -and
+    elseif ($null -ne $saved -and [string]$saved.modVersion -in @('0.2.0', '0.2.1') -and
             $assemblyHash -eq [string]$saved.hardModeAssemblySha256 -and
-            $bundleHash -eq [string]$saved.hardModeBundleSha256) { $state = 'Managed020' }
+            $bundleHash -eq [string]$saved.hardModeBundleSha256) { $state = 'Managed' }
     elseif ($assemblyHash -in @($VanillaAssemblySha256, $Version010AssemblySha256) -or
             $bundleHash -in @($VanillaBundleSha256, $Version010BundleSha256)) { $state = 'Mixed' }
     [pscustomobject]@{ State=$state; AssemblySha256=$assemblyHash; BundleSha256=$bundleHash; Paths=$paths; SavedState=$saved }
@@ -106,7 +137,7 @@ function Apply-BasePatch {
         $sourceHash = Convert-BytesToHex $reader.ReadBytes(32)
         $targetHash = Convert-BytesToHex $reader.ReadBytes(32)
         $count = $reader.ReadInt32()
-        if ($length -ne (Get-Item $OutputFile).Length -or $sourceHash -ne $VanillaAssemblySha256 -or $targetHash -ne $BaseAssemblySha256) { throw 'Native patch payload does not belong to Hard Economy 0.2.0.' }
+        if ($length -ne (Get-Item $OutputFile).Length -or $sourceHash -ne $VanillaAssemblySha256 -or $targetHash -ne $BaseAssemblySha256) { throw 'Native patch payload does not belong to Hard Economy 0.2.1.' }
         if ($count -lt 1 -or $count -gt 10000) { throw 'Native patch payload contains an invalid range count.' }
         $writer = [IO.File]::Open($OutputFile, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
         try {
@@ -186,13 +217,14 @@ function Restore-VanillaFiles {
 function Install-HardEconomy {
     param([string]$Root)
     Assert-GameClosed
-    foreach ($file in @($PatchFile,$SettingsFile,$EconomyScript,$MilestoneScript,$SaleScript,(Join-Path $ToolDirectory 'AssetsTools.NET.dll'),(Join-Path $ToolDirectory 'AssetsTools.NET.Cpp2IL.dll'),(Join-Path $ToolDirectory 'classdata.tpk'))){Assert-File $file}
+    foreach ($file in @($PatchFile,$SettingsFile,$EconomyScript,$MilestoneScript,$SaleScript)){Assert-File $file}
+    Prepare-TunerComponents
     $status=Get-Status $Root
-    if ($status.State -notin @('Vanilla','Version010','LocalTest','Managed020')) { throw "Installation stopped because the game files are '$($status.State)'. Restore them through Steam before installing." }
+    if ($status.State -notin @('Vanilla','Version010','LocalTest','Managed')) { throw "Installation stopped because the game files are '$($status.State)'. Restore them through Steam before installing." }
     $vanilla=Get-VanillaSources $status
     $backupDirectory = if ($status.State -eq 'Vanilla') { New-VanillaBackup $status.Paths } else { $vanilla.BackupDirectory }
     $operationBackup = New-OperationBackup $status.Paths
-    $temporary=Join-Path ([IO.Path]::GetTempPath()) ('HardEconomy020-'+[Guid]::NewGuid().ToString('N'))
+    $temporary=Join-Path ([IO.Path]::GetTempPath()) ('HardEconomy021-'+[Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $temporary -Force | Out-Null
     $baseAssembly=Join-Path $temporary 'base.dll'; $finalAssembly=Join-Path $temporary 'GameAssembly.dll'
     $economyBundle=Join-Path $temporary 'economy.bundle'; $finalBundle=Join-Path $temporary 'final.bundle'
@@ -224,20 +256,20 @@ function Restore-HardEconomy {
     Assert-GameClosed
     $status=Get-Status $Root
     if ($status.State -eq 'Vanilla') { return 'The supported original Steam files are already active.' }
-    if ($status.State -notin @('Version010','LocalTest','Managed020')) { throw "Restoration stopped because the game files are '$($status.State)'. Use Steam file verification instead." }
+    if ($status.State -notin @('Version010','LocalTest','Managed')) { throw "Restoration stopped because the game files are '$($status.State)'. Use Steam file verification instead." }
     $vanilla=Get-VanillaSources $status
     Restore-VanillaFiles $status.Paths $vanilla.BackupDirectory
     return "Original Construction Simulator files restored successfully.`r`nBackup kept at: $($vanilla.BackupDirectory)"
 }
 
-function Format-Status { param($Status) switch($Status.State){'Vanilla'{'Supported original Steam files detected. Hard Economy 0.2.0 can be applied.'}'Version010'{'Hard Economy 0.1.0-beta detected. It can be updated to 0.2.0.'}'LocalTest'{'The known Hard Economy local test build is active. It can be replaced with release 0.2.0.'}'Managed020'{'Hard Economy 0.2.0 is active. Edit the settings file and click Apply to rebuild it.'}'Mixed'{'Mixed game files detected. No changes will be made.'}default{'Unsupported or externally modified game files detected. No changes will be made.'}} }
+function Format-Status { param($Status) switch($Status.State){'Vanilla'{"Supported original Steam files detected. Hard Economy $ModVersion can be applied."}'Version010'{"Hard Economy 0.1.0-beta detected. It can be updated to $ModVersion."}'LocalTest'{"The known Hard Economy local test build is active. It can be updated to $ModVersion."}'Managed'{"Managed Hard Economy $($Status.SavedState.modVersion) is active. Apply to rebuild it as $ModVersion."}'Mixed'{'Mixed game files detected. No changes will be made.'}default{'Unsupported or externally modified game files detected. No changes will be made.'}} }
 
 function Show-Gui {
     Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing
     [Windows.Forms.Application]::EnableVisualStyles()
     $form=[Windows.Forms.Form]::new();$form.Text="Construction Simulator - Hard Economy $ModVersion";$form.StartPosition='CenterScreen';$form.ClientSize=[Drawing.Size]::new(720,455);$form.FormBorderStyle='FixedDialog';$form.MaximizeBox=$false
     $title=[Windows.Forms.Label]::new();$title.Text='Hard Economy';$title.Font=[Drawing.Font]::new('Segoe UI',18,[Drawing.FontStyle]::Bold);$title.Location=[Drawing.Point]::new(24,18);$title.AutoSize=$true;$form.Controls.Add($title)
-    $subtitle=[Windows.Forms.Label]::new();$subtitle.Text='Version 0.2.0 - configurable economy patcher';$subtitle.Location=[Drawing.Point]::new(28,58);$subtitle.Size=[Drawing.Size]::new(660,23);$form.Controls.Add($subtitle)
+    $subtitle=[Windows.Forms.Label]::new();$subtitle.Text="Version $ModVersion - configurable economy patcher";$subtitle.Location=[Drawing.Point]::new(28,58);$subtitle.Size=[Drawing.Size]::new(660,23);$form.Controls.Add($subtitle)
     $pathLabel=[Windows.Forms.Label]::new();$pathLabel.Text='Construction Simulator folder:';$pathLabel.Location=[Drawing.Point]::new(28,92);$pathLabel.AutoSize=$true;$form.Controls.Add($pathLabel)
     $path=[Windows.Forms.TextBox]::new();$path.Location=[Drawing.Point]::new(28,116);$path.Size=[Drawing.Size]::new(550,24);$path.Text=if([string]::IsNullOrWhiteSpace($GameDirectory)){Find-DefaultGameRoot}else{$GameDirectory};$form.Controls.Add($path)
     $browse=[Windows.Forms.Button]::new();$browse.Text='Browse...';$browse.Location=[Drawing.Point]::new(590,114);$browse.Size=[Drawing.Size]::new(100,28);$form.Controls.Add($browse)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed the crash when opening the internal Warehouse tab.
+- Fixed Windows DLL loading error `0x80131515` by checking packaged tuner files
+  and removing their download block before loading them.
+- Kept the 0.2.0 economy defaults unchanged. Copy a customized
+  `HardEconomy-Settings.txt` into the new patcher folder before applying.
+
 ## 0.2.0
 
 - Added one documented `HardEconomy-Settings.txt` file for user-defined economy

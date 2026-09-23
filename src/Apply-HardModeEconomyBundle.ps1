@@ -222,8 +222,15 @@ foreach ($requiredTool in @($assetsToolsPath, $cpp2IlPath, $classPackagePath)) {
     }
 }
 
-Add-Type -Path $assetsToolsPath
-Add-Type -Path $cpp2IlPath
+foreach ($assemblyPath in @($assetsToolsPath, $cpp2IlPath)) {
+    try { Add-Type -Path $assemblyPath -ErrorAction Stop }
+    catch {
+        if ($_.Exception.ToString().Contains('0x80131515')) {
+            throw "Windows blocked $([IO.Path]::GetFileName($assemblyPath)). Extract the complete Hard Economy ZIP to a local folder and run the patcher again."
+        }
+        throw
+    }
+}
 
 $inputPath = (Resolve-Path -LiteralPath $InputBundle).Path
 $assemblyPath = (Resolve-Path -LiteralPath $GameAssembly).Path

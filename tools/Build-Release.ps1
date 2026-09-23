@@ -7,14 +7,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$version = '0.2.0'
+$version = '0.2.1'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
     $OutputDirectory = Join-Path $repositoryRoot 'build'
 }
 $archivePath = (Resolve-Path -LiteralPath $UabeaArchive).Path
 $buildRoot = [System.IO.Path]::GetFullPath($OutputDirectory)
-$stagingRoot = Join-Path $buildRoot 'staging'
+$allowedBuildRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot 'build'))
+if ($buildRoot -ne $allowedBuildRoot -and
+    -not $buildRoot.StartsWith(($allowedBuildRoot.TrimEnd('\') + '\'), [StringComparison]::OrdinalIgnoreCase)) {
+    throw "OutputDirectory must be the repository build directory or a directory below it: $allowedBuildRoot"
+}
+$stagingRoot = Join-Path $buildRoot ('staging-' + [Guid]::NewGuid().ToString('N'))
 $artifactsRoot = Join-Path $buildRoot 'artifacts'
 $packageName = "Hard Economy $version Patcher"
 $packageRoot = Join-Path $stagingRoot $packageName
@@ -36,8 +41,8 @@ if ($archiveHash -ne $expectedArchiveHash) {
     throw "UABEA archive hash is $archiveHash; expected $expectedArchiveHash."
 }
 
-if (Test-Path -LiteralPath $stagingRoot) {
-    Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+if (Test-Path -LiteralPath $zipPath) {
+    throw "Release archive already exists: $zipPath. Choose a new OutputDirectory below build."
 }
 New-Item -ItemType Directory -Path $packageRoot, $toolsRoot, $payloadRoot, $artifactsRoot -Force | Out-Null
 
@@ -74,9 +79,6 @@ foreach ($toolName in $expectedTools.Keys) {
     -ManifestFile (Join-Path $repositoryRoot 'patches\GameAssembly.patch.json') `
     -OutputFile (Join-Path $payloadRoot 'GameAssembly.hmpatch') | Out-Host
 
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
 Compress-Archive -LiteralPath $packageRoot -DestinationPath $zipPath -CompressionLevel Optimal
 
 [pscustomobject]@{
